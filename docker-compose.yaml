@@ -1,0 +1,94 @@
+services:
+  # Apache Kafka (KRaft mode, single node)
+  kafka:
+    image: apache/kafka:3.7.2
+    container_name: iot-kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"      # внутренний listener (для контейнеров)
+      - "29092:29092"    # внешний listener (для хоста)
+    environment:
+      # Идентификация узла
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+
+      # Listeners
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+
+      # Controller quorum (KRaft)
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+
+      # Single-node настройки (replication factor = 1) 
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - iot-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Kafka UI (Kafbat — форк provectuslabs)
+  kafka-ui:
+    image: kafbat/kafka-ui:v1.0.0
+    container_name: iot-kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: 'iot-local'
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 'kafka:9092'
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    networks:
+      - iot-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # MinIO (Chainguard community image)
+  minio:
+    image: pgsty/silo:latest
+    container_name: iot-minio
+    hostname: minio
+    ports:
+      - "9000:9000"      # S3 API
+      - "9001:9001"      # Web Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - iot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+# Сети
+networks:
+  iot-network:
+    driver: bridge
+
+# Тома
+volumes:
+  kafka_data:
+    driver: local
+  minio_data:
+    driver: local
