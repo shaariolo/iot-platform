@@ -88,14 +88,19 @@ services:
     image: apache/spark:3.5.5-scala2.12-java17-python3-ubuntu
     container_name: iot-spark-master
     hostname: spark-master
-    command: >
-      /opt/spark/bin/spark-class
-      org.apache.spark.deploy.master.Master
+    user: root
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        mkdir -p /home/spark/.ivy2/cache /home/spark/.ivy2/jars
+        chown -R spark:spark /home/spark
+        exec /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     ports:
-      - "7077:7077"      # Master RPC
-      - "8081:8080"      # Web UI
+      - "7077:7077"
+      - "8081:8080"
     volumes:
       - ./spark:/opt/spark-apps
+      - spark_ivy_cache:/root/.ivy2      
     networks:
       - iot-network
     restart: unless-stopped
@@ -107,14 +112,18 @@ services:
     image: apache/spark:3.5.5-scala2.12-java17-python3-ubuntu
     container_name: iot-spark-worker
     hostname: spark-worker
-    command: >
-      /opt/spark/bin/spark-class
-      org.apache.spark.deploy.worker.Worker
-      spark://spark-master:7077
+    user: root
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        mkdir -p /home/spark/.ivy2/cache /home/spark/.ivy2/jars
+        chown -R spark:spark /home/spark
+        exec /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     ports:
-      - "8082:8081"      # Worker Web UI
+      - "8082:8081"
     volumes:
       - ./spark:/opt/spark-apps
+      - spark_ivy_cache:/root/.ivy2       
     networks:
       - iot-network
     depends_on:
@@ -131,4 +140,6 @@ volumes:
   kafka_data:
     driver: local
   minio_data:
+    driver: local
+  spark_ivy_cache:       
     driver: local
