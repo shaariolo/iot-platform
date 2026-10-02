@@ -81,6 +81,46 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # ==========================================
+  # Spark Master
+  # ==========================================
+  spark-master:
+    image: apache/spark:3.5.5-scala2.12-java17-python3-ubuntu
+    container_name: iot-spark-master
+    hostname: spark-master
+    command: >
+      /opt/spark/bin/spark-class
+      org.apache.spark.deploy.master.Master
+    ports:
+      - "7077:7077"      # Master RPC
+      - "8081:8080"      # Web UI
+    volumes:
+      - ./spark:/opt/spark-apps
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ==========================================
+  # Spark Worker
+  # ==========================================
+  spark-worker:
+    image: apache/spark:3.5.5-scala2.12-java17-python3-ubuntu
+    container_name: iot-spark-worker
+    hostname: spark-worker
+    command: >
+      /opt/spark/bin/spark-class
+      org.apache.spark.deploy.worker.Worker
+      spark://spark-master:7077
+    ports:
+      - "8082:8081"      # Worker Web UI
+    volumes:
+      - ./spark:/opt/spark-apps
+    networks:
+      - iot-network
+    depends_on:
+      - spark-master
+    restart: unless-stopped   
+
 # Сети
 networks:
   iot-network:
